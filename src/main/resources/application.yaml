@@ -1,0 +1,59 @@
+
+server:
+  port: 8081
+
+spring:
+  application:
+    name: sales
+  datasource:
+    url: ${DB_URL}
+    username: ${DB_USERNAME}
+    password: ${DB_PASSWORD}
+    driver-class-name: org.postgresql.Driver
+    hikari:
+      maximum-pool-size: 3
+      minimum-idle: 1
+      idle-timeout: 30000
+      max-lifetime: 600000
+
+  jpa:
+    hibernate:
+      ddl-auto: validate
+    show-sql: true
+    properties:
+      hibernate:
+        format_sql: true
+    database-platform: org.hibernate.dialect.PostgreSQLDialect
+
+eureka:
+  client:
+    service-url:
+      defaultZone: http://localhost:8761/eureka/
+    fetch-registry: true
+    register-with-eureka: true
+  instance:
+    prefer-ip-address: true
+
+sales:
+  paging:
+    page-size: 20
+
+# Configuración de Logs (SLF4J / Logback)
+logging:
+  level:
+    root: INFO
+    com.teraha.sales: DEBUG
+    org.hibernate.SQL: DEBUG
+  file:
+    name: logs/sales-service.log
+
+# Configuración para acceder a la documentación de Swagger
+springdoc:
+  api-docs:
+    path: /v3/api-docs
+  swagger-ui:
+    path: /swagger-ui.html
+
+products:
+  service:
+    url: http://products
