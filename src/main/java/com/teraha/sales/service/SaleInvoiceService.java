@@ -34,6 +34,9 @@ import com.teraha.sales.exception.SaleInvoiceNotFoundException;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.web.client.RestTemplate;
+import org.springframework.cache.annotation.Cacheable;
+import org.springframework.cache.annotation.CachePut;
+import org.springframework.cache.annotation.CacheEvict;
 
 @Slf4j
 @RequiredArgsConstructor
@@ -51,6 +54,7 @@ public class SaleInvoiceService {
     private final EntityManager entityManager;
     private final ProductRepository productRepository;
 
+    @CachePut(cacheNames = "sales:invoices", key = "#result.id")
     public SaleInvoiceDTO createSaleInvoice(SaleInvoiceDTO dto) {
         log.info("Starting creation of sale invoice for client ID {}", dto != null ? dto.getClientId() : null);
 
@@ -95,6 +99,7 @@ public class SaleInvoiceService {
     }
 
     @Transactional(readOnly = true)
+    @Cacheable(cacheNames = "sales:invoices", key = "#id")
     public SaleInvoiceDTO findSaleInvoiceById(Long id) {
         log.info("Fetching sale invoice with ID: {}", id);
         return saleInvoiceRepository.findById(id)

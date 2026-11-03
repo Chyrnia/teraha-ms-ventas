@@ -33,7 +33,6 @@ import org.springframework.web.bind.annotation.RestController;
 
 @RestController
 @RequestMapping(path="/clients", produces="application/json")
-@CrossOrigin
 @RequiredArgsConstructor
 @Tag(name = "Clients", description = "Endpoints for managing and querying clients")
 public class ClientController {

@@ -29,7 +29,6 @@ import lombok.RequiredArgsConstructor;
 
 @RestController
 @RequestMapping(path="/sales", produces="application/json")
-@CrossOrigin
 @RequiredArgsConstructor
 public class SaleInvoiceController {
 

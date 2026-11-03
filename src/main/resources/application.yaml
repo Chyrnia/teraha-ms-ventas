@@ -15,6 +15,18 @@ spring:
       minimum-idle: 1
       idle-timeout: 30000
       max-lifetime: 600000
+  security:
+    oauth2:
+      resourceserver:
+        jwt:
+          public-key-location: file:/home/aylen/.config/teraha/security/keys/public.pem
+          authorities-claim-name: roles
+          authority-prefix: ""
+  data:
+    redis:
+      host: ${REDIS_HOST:localhost}
+      port: ${REDIS_PORT:6379}
+      timeout: ${REDIS_TIMEOUT:2s}
 
   jpa:
     hibernate:
@@ -44,6 +56,8 @@ logging:
     root: INFO
     com.teraha.sales: DEBUG
     org.hibernate.SQL: DEBUG
+    org.springframework.cache: TRACE
+    org.springframework.data.redis: DEBUG
   file:
     name: logs/sales-service.log
 
@@ -57,3 +71,11 @@ springdoc:
 products:
   service:
     url: http://products
+
+
+app:
+  cache:
+    ttl:
+      default-seconds: ${CACHE_TTL_DEFAULT_SECONDS:600}
+      clients-seconds: ${SALES_CLIENTS_CACHE_TTL_SECONDS:300}
+      sale-invoices-seconds: ${SALES_INVOICES_CACHE_TTL_SECONDS:300}

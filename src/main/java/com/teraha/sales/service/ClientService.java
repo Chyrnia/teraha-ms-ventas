@@ -15,6 +15,9 @@ import com.teraha.sales.exception.ClientConflictException;
 import com.teraha.sales.exception.ClientNotFoundException;
 import com.teraha.sales.mapper.ClientMapper;
 import com.teraha.sales.repository.ClientRepository;
+import org.springframework.cache.annotation.Cacheable;
+import org.springframework.cache.annotation.CachePut;
+import org.springframework.cache.annotation.CacheEvict;
 
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -29,6 +32,7 @@ public class ClientService {
     private final ClientRepository clientRepository;
     private final ClientMapper clientMapper;
 
+    @CachePut(cacheNames = "sales:clients", key = "#result.id")
     public ClientDTO createClient(ClientDTO dto) {
         if (dto.getDocument() != null && clientRepository.existsByDocument(dto.getDocument())) {
             log.warn("Attempted to create client with duplicate document: {}", dto.getDocument());
@@ -43,6 +47,7 @@ public class ClientService {
     }
 
     @Transactional(readOnly = true)
+    @Cacheable(cacheNames = "sales:clients", key = "#id")
     public ClientDTO findClientById(Long id) {
         return clientRepository.findByIdAndActiveTrue(id)
                 .map(clientMapper::toDto)
@@ -61,6 +66,7 @@ public class ClientService {
                 });
     }
 
+    @CacheEvict(cacheNames = "sales:clients", key = "#id")
     public boolean deactivateClient(Long id) {
         // Solo busca e intenta desactivar clientes que actualmente están ACTIVOS
         Optional<Client> optClient = clientRepository.findByIdAndActiveTrue(id);

@@ -24,7 +24,6 @@ public interface ClientRepository extends BaseRepository<Client> {
 		  AND (
 			LOWER(c.name) LIKE LOWER(CONCAT('%', :query, '%'))
 			OR LOWER(c.document) LIKE LOWER(CONCAT('%', :query, '%'))
-			OR LOWER(c.timbrado) LIKE LOWER(CONCAT('%', :query, '%'))
 		  )
 		  """)
     Page<Client> searchActiveClients(@Param("query") String query,
