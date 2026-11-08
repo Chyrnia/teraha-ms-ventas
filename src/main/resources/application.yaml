@@ -19,7 +19,7 @@ spring:
     oauth2:
       resourceserver:
         jwt:
-          public-key-location: file:/home/aylen/.config/teraha/security/keys/public.pem
+          public-key-location: file:${JWT_PUBLIC_KEY_LOCATION}
           authorities-claim-name: roles
           authority-prefix: ""
   data:
@@ -48,7 +48,7 @@ eureka:
 
 sales:
   paging:
-    page-size: 20
+    page-size: 5
 
 # Configuración de Logs (SLF4J / Logback)
 logging:
@@ -59,7 +59,7 @@ logging:
     org.springframework.cache: TRACE
     org.springframework.data.redis: DEBUG
   file:
-    name: logs/sales-service.log
+    name: ${LOGFILE}
 
 # Configuración para acceder a la documentación de Swagger
 springdoc:
