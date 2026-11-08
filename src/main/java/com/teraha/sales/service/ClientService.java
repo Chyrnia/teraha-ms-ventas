@@ -56,6 +56,11 @@ public class ClientService {
 
     public Optional<ClientDTO> updateClient(Long id, ClientDTO dto) {
         // Solo permite actualizar clientes que estén ACTIVOS
+        if (clientRepository.existsByDocument(dto.getDocument())) {
+            log.warn("Attempted to update client with duplicate document: {}", dto.getDocument());
+            throw new ClientConflictException(dto.getDocument());
+        }
+
         return clientRepository.findByIdAndActiveTrue(id)
                 .map(client -> {
                     log.info("Updating client with ID: {}", id);
