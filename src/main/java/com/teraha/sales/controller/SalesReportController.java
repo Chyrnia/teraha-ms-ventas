@@ -12,10 +12,13 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
+import io.swagger.v3.oas.annotations.security.SecurityRequirement;
+
 import lombok.RequiredArgsConstructor;
 
 @RestController
 @RequestMapping(path = "/reports/sales", produces = "application/json")
+@SecurityRequirement(name = "bearerAuth")
 @RequiredArgsConstructor
 public class SalesReportController {
 

@@ -49,6 +49,10 @@ public class SecurityConfig {
                         .requestMatchers(HttpMethod.DELETE, "/clients/**")
                         .hasAnyRole("MANAGER", "SYSADMIN")
 
+						// Solicitar reportes: permitido a gerentes y sysadmin
+						.requestMatchers(HttpMethod.GET, "/reports/sales/**")
+						.hasAnyRole("MANAGER", "SYSADMIN")
+
                         // Cualquier otra petición requiere autenticación general
                         .anyRequest().authenticated())
                 .oauth2ResourceServer(oauth2 ->
