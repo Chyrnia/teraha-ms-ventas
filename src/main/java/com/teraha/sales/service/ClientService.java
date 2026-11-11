@@ -13,6 +13,7 @@ import com.teraha.commons.entities.Client;
 import com.teraha.sales.configs.PagingConfigs;
 import com.teraha.sales.exception.ClientConflictException;
 import com.teraha.sales.exception.ClientNotFoundException;
+import com.teraha.sales.exception.ClientBadRequestException;
 import com.teraha.sales.mapper.ClientMapper;
 import com.teraha.sales.repository.ClientRepository;
 import org.springframework.cache.annotation.Cacheable;
@@ -54,22 +55,20 @@ public class ClientService {
                 .orElseThrow(() -> new ClientNotFoundException(id));
     }
 
-    public Optional<ClientDTO> updateClient(Long id, ClientDTO dto) {
-        // Solo permite actualizar clientes que estén ACTIVOS
-        if (clientRepository.existsByDocument(dto.getDocument())) {
-            log.warn("Attempted to update client with duplicate document: {}", dto.getDocument());
-            throw new ClientConflictException(dto.getDocument());
-        }
+	@CachePut(cacheNames = "sales:clients", key = "#result.id")
+	public ClientDTO updateClient(Long id, ClientDTO dto) {
 
-        return clientRepository.findByIdAndActiveTrue(id)
-                .map(client -> {
-                    log.info("Updating client with ID: {}", id);
-                    clientMapper.updateEntity(dto, client);
-                    // Debido al estado gestionado por JPA (@Transactional),
-                    // el save actualiza la entidad en BD automáticamente al terminar el método
-                    return clientMapper.toDto(clientRepository.save(client));
-                });
-    }
+		validateClientUpdateInfo(dto);
+
+		Client client = clientRepository.findByIdAndActiveTrue(id)
+			.orElseThrow(() -> new ClientNotFoundException(id));
+
+		log.info("Updating client with ID: {}", id);
+
+		clientMapper.updateEntity(dto, client);
+
+		return clientMapper.toDto(clientRepository.save(client));
+	}
 
     @CacheEvict(cacheNames = "sales:clients", key = "#id")
     public boolean deactivateClient(Long id) {
@@ -99,4 +98,27 @@ public class ClientService {
         }
         return clients.map(clientMapper::toDto);
     }
+
+	private void validateClientUpdateInfo(ClientDTO dto) {
+
+		if (dto == null) {
+			throw new ClientBadRequestException("Client data is required");
+		}
+
+		if (
+				dto.getName() == null &&
+				dto.getAddress() == null &&
+				dto.getEmail() == null &&
+				dto.getPhone() == null &&
+				dto.getBirthDate() == null
+		   ) {
+			throw new ClientBadRequestException(
+					"At least one client attribute must be provided"
+					);
+		   }
+
+		if (dto.getName() != null && dto.getName().isBlank()) {
+			throw new ClientBadRequestException("Client name cannot be blank");
+		}
+	}
 }

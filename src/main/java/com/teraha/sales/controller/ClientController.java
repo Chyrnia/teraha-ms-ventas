@@ -90,9 +90,9 @@ public class ClientController {
             @Parameter(description = "ID of the client to update", required = true, example = "1")
             @PathVariable("id") Long id,
             @Valid @RequestBody ClientDTO dto) {
-        Optional<ClientDTO> client = clientService.updateClient(id, dto);
+        ClientDTO client = clientService.updateClient(id, dto);
 
-        return client.map(ResponseEntity::ok).orElseThrow(() -> new ClientNotFoundException(id));
+        return new ResponseEntity<>(client, HttpStatus.OK);
 
     }
 
