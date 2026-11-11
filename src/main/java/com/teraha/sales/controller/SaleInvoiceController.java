@@ -1,8 +1,6 @@
 package com.teraha.sales.controller;
 
-import java.util.Optional;
 
-import com.teraha.commons.dtos.ClientDTO;
 import com.teraha.commons.dtos.SaleInvoiceDTO;
 import com.teraha.sales.service.SaleInvoiceService;
 
@@ -20,8 +18,8 @@ import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PostMapping;
-import org.springframework.web.bind.annotation.PutMapping;
-import org.springframework.web.bind.annotation.CrossOrigin;
+import org.springframework.web.bind.annotation.DeleteMapping;
+import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.data.domain.Page;
@@ -62,10 +60,26 @@ public class SaleInvoiceController {
     }
 
     @GetMapping
-    @Operation(summary = "List paginated Sale Invoices", description = "Returns a paginated list of Sale Invoices.")
-    @ApiResponse(responseCode = "200", description = "Page of Sale Invoices retrieved successfully")
-    public Page<SaleInvoiceDTO> getSaleInvoices(@RequestParam(name="page", defaultValue="0") int page, @RequestParam(name="search", required=false) String search){
-        return saleInvoiceService.listSaleInvoices(page, search);
-    }
+	@Operation(summary = "List paginated Sale Invoices", description = "Returns a paginated list of Sale Invoices.")
+	@ApiResponse(responseCode = "200", description = "Page of Sale Invoices retrieved successfully")
+	public Page<SaleInvoiceDTO> getSaleInvoices(@RequestParam(name="page", defaultValue="0") int page, @RequestParam(name="search", required=false) String search){
+		return saleInvoiceService.listSaleInvoices(page, search);
+	}
+
+	@DeleteMapping("/{id}")
+	@PreAuthorize("hasAnyRole('MANAGER', 'SYSADMIN')")
+	@ResponseStatus(HttpStatus.NO_CONTENT)
+	@Operation(
+	summary = "Cancel Sale Invoice",
+	description = "Logically cancels a Sale Invoice and restores the deducted product inventory."
+	)
+	@ApiResponses({
+	@ApiResponse(responseCode = "204", description = "Sale Invoice cancelled successfully"),
+	@ApiResponse(responseCode = "400", description = "Sale Invoice is already cancelled or inventory reversal failed", content = @Content),
+	@ApiResponse(responseCode = "404", description = "Sale Invoice not found", content = @Content)
+	})
+	public void deactivateSaleInvoice(@PathVariable("id") Long id) {
+		saleInvoiceService.deactivateSaleInvoice(id);
+	}
 
 }

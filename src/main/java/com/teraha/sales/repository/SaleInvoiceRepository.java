@@ -5,7 +5,10 @@ import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import com.teraha.commons.entities.SaleInvoice;
 import org.springframework.data.jpa.repository.Query;
+import org.springframework.data.jpa.repository.Lock;
 import org.springframework.data.repository.query.Param;
+
+import jakarta.persistence.LockModeType;
 
 public interface SaleInvoiceRepository extends InvoiceRepository<SaleInvoice> {
 
@@ -39,4 +42,13 @@ public interface SaleInvoiceRepository extends InvoiceRepository<SaleInvoice> {
                 """
     )
     Page<SaleInvoice> searchSale(@Param("query") String query, Pageable pageable);
+
+	@Lock(LockModeType.PESSIMISTIC_WRITE)
+	@Query(
+		"""
+			SELECT si FROM SaleInvoice si
+			WHERE si.id = :id
+		"""
+	)
+	Optional<SaleInvoice> findByIdForUpdate(@Param("id") Long id);
 }

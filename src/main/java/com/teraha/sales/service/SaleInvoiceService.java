@@ -1,13 +1,17 @@
 package com.teraha.sales.service;
 
-import java.math.BigDecimal;
 import java.util.List;
+import java.util.ArrayList;
+import java.util.Map;
+import java.util.LinkedHashMap;
+import java.math.BigDecimal;
 
 import com.teraha.commons.dtos.InventoryUpdate;
-import com.teraha.commons.dtos.ProductDTO;
+import com.teraha.commons.dtos.InventoryUpdateLine;
 import com.teraha.commons.entities.Product;
 import com.teraha.sales.exception.ProductNotFoundException;
 import com.teraha.sales.exception.SaleInvoiceBadRequestException;
+
 import jakarta.persistence.EntityManager;
 
 import com.teraha.commons.dtos.SaleInvoiceDetailDTO;
@@ -70,9 +74,8 @@ public class SaleInvoiceService {
         saleInvoice.setTotal(total);
 
         // 2. Actualizar stock en el microservicio de productos
-        for (SaleInvoiceDetailDTO d : dto.getDetails()) {
-            updateProductStock(d.getProductId(), -d.getQuantity());
-        }
+
+		updateProductStocks(saleInvoice.getDetails(), -1);
 
         try {
 
@@ -84,15 +87,13 @@ public class SaleInvoiceService {
         } catch (Exception e) {
             log.error("Failed to save invoice locally. Compensating inventory stock...", e);
 
-            // Si falla algo en sales, se revierte el descuento en products
-            for (SaleInvoiceDetailDTO d : dto.getDetails()) {
-                try {
-                    // revertir el descuento de stock
-                    updateProductStock(d.getProductId(), d.getQuantity());
-                } catch (Exception ex) {
-                    log.error("CRITICAL: Failed to compensate stock for product ID {}", d.getProductId(), ex);
-                }
-            }
+			// Si falla algo en sales, se revierte el descuento en products
+			try {
+				// revertir el descuento de stock
+				reverseProductStocks(saleInvoice.getDetails());
+			} catch (Exception ex) {
+				log.error("CRITICAL: Failed to compensate stock for products", ex);
+			}
 
             throw new SaleInvoiceBadRequestException("Error saving sale invoice. Stock has been reverted.");
         }
@@ -124,96 +125,165 @@ public class SaleInvoiceService {
         return invoices.map(saleInvoiceMapper::toDto);
     }
 
-    private void validateCreationDto(SaleInvoiceDTO dto){
-        if (dto.getTransactionDate() == null) {
-            log.error("No invoice date provided");
-            throw new SaleInvoiceBadRequestException("Date invalid");
-        }
+	@CacheEvict(cacheNames = "sales:invoices", key = "#id")
+	public void deactivateSaleInvoice(Long id) {
 
-        if (dto.getClientId() == null) {
-            log.error("No client provided");
-            throw new SaleInvoiceBadRequestException("Client invalid");
-        }
+		SaleInvoice invoice = saleInvoiceRepository
+			.findByIdForUpdate(id)
+			.orElseThrow(() -> new SaleInvoiceNotFoundException(id));
 
-        if (dto.getDetails() == null || dto.getDetails().isEmpty()) {
-            log.error("No details provided");
-            throw new SaleInvoiceBadRequestException("Empty details");
-        }
-    }
+		if (invoice.isCancelled()) {
+			throw new SaleInvoiceBadRequestException(
+					"Sale invoice is already cancelled"
+					);
+		}
 
-    private BigDecimal fillInvoiceWithDetails(SaleInvoice sale, List<SaleInvoiceDetailDTO> details){
-        //Validacion de details
-        BigDecimal total = BigDecimal.ZERO;
-        log.debug("Processing {} detail items for sale invoice", details.size());
+		log.info("Cancelling sale invoice {}", id);
 
-        for (SaleInvoiceDetailDTO d : details) {
+		// Restore the stock deducted when this sale was registered.
+		reverseProductStocks(invoice.getDetails());
 
-            // validate productId
-            if (d.getProductId() == null) {
-                log.error("Validation failed in detail: Product ID is null");
-                throw new SaleInvoiceBadRequestException("Required productId");
-            }
+		// Only cancel after Products accepts the stock restoration.
+		invoice.setCancelled(true);
+	}
 
-            // retrieve and validate product
-            Product product = productRepository
-                    .findByIdAndActiveTrue(d.getProductId())
-                    .orElseThrow(() -> {
-                        log.error("Product not found or inactive with ID: {}", d.getProductId());
-                        return new ProductNotFoundException(d.getProductId());
-                    });
+	private void validateCreationDto(SaleInvoiceDTO dto){
+		if (dto.getTransactionDate() == null) {
+			log.error("No invoice date provided");
+			throw new SaleInvoiceBadRequestException("Date invalid");
+		}
+
+		if (dto.getClientId() == null) {
+			log.error("No client provided");
+			throw new SaleInvoiceBadRequestException("Client invalid");
+		}
+
+		if (dto.getDetails() == null || dto.getDetails().isEmpty()) {
+			log.error("No details provided");
+			throw new SaleInvoiceBadRequestException("Empty details");
+		}
+	}
+
+	private BigDecimal fillInvoiceWithDetails(SaleInvoice sale, List<SaleInvoiceDetailDTO> details){
+		//Validacion de details
+		BigDecimal total = BigDecimal.ZERO;
+		log.debug("Processing {} detail items for sale invoice", details.size());
+
+		for (SaleInvoiceDetailDTO d : details) {
+
+			// validate productId
+			if (d.getProductId() == null) {
+				log.error("Validation failed in detail: Product ID is null");
+				throw new SaleInvoiceBadRequestException("Required productId");
+			}
+
+			// retrieve and validate product
+			Product product = productRepository
+				.findByIdAndActiveTrue(d.getProductId())
+				.orElseThrow(() -> {
+					log.error("Product not found or inactive with ID: {}", d.getProductId());
+					return new ProductNotFoundException(d.getProductId());
+				});
 
 
-            // validate quantity
-            if (d.getQuantity() == null || d.getQuantity() <= 0) {
-                log.error("Validation failed in detail: Quantity ({}) must be > 0 for product ID {}", d.getQuantity(), d.getProductId());
-                throw new SaleInvoiceBadRequestException("Required quantity > 0");
-            }
-            BigDecimal quantity = BigDecimal.valueOf(d.getQuantity());
+			// validate quantity
+			if (d.getQuantity() == null || d.getQuantity() <= 0) {
+				log.error("Validation failed in detail: Quantity ({}) must be > 0 for product ID {}", d.getQuantity(), d.getProductId());
+				throw new SaleInvoiceBadRequestException("Required quantity > 0");
+			}
+			BigDecimal quantity = BigDecimal.valueOf(d.getQuantity());
 
-            BigDecimal unitPrice = product.getPrice();
+			BigDecimal unitPrice = product.getPrice();
 
-            // validate unit price
-            if (d.getUnitPrice() == null || d.getUnitPrice() <= 0) {
-                log.error("Validation failed in detail: Unit price ({}) must be > 0 for product ID {}", d.getUnitPrice(), d.getProductId());
-                throw new SaleInvoiceBadRequestException("Required unit price > 0");
-            }
+			// validate unit price
+			if (d.getUnitPrice() == null || d.getUnitPrice() <= 0) {
+				log.error("Validation failed in detail: Unit price ({}) must be > 0 for product ID {}", d.getUnitPrice(), d.getProductId());
+				throw new SaleInvoiceBadRequestException("Required unit price > 0");
+			}
 
-            SaleInvoiceDetail detail = new SaleInvoiceDetail(product, d.getQuantity(), unitPrice);
-            sale.addDetail(detail);
+			SaleInvoiceDetail detail = new SaleInvoiceDetail(product, d.getQuantity(), unitPrice);
+			sale.addDetail(detail);
 
-            BigDecimal subtotal = unitPrice.multiply(quantity);
-            total = total.add(subtotal);
+			BigDecimal subtotal = unitPrice.multiply(quantity);
+			total = total.add(subtotal);
 
-            log.debug("Added detail - Product ID: {}, Quantity: {}, Unit Price: {}, Subtotal: {}",
-                    d.getProductId(), d.getQuantity(), unitPrice, subtotal);
-        }
+			log.debug("Added detail - Product ID: {}, Quantity: {}, Unit Price: {}, Subtotal: {}",
+					d.getProductId(), d.getQuantity(), unitPrice, subtotal);
+		}
 
-        return total;
-    }
+		return total;
+	}
 
-    private BigDecimal computeTotal(SaleInvoice sale){
-        return BigDecimal.ONE;
-    }
+	private BigDecimal computeTotal(SaleInvoice sale){
+		return BigDecimal.ONE;
+	}
 
-    private void updateProductStock(Long productId, int quantityDelta) {
+	private void updateProductStocks(
+			List<SaleInvoiceDetail> details,
+			int multiplier
+			) 
+	{
+		applyProductStockChanges(details, multiplier);
+	}
 
-        log.info("Sending stock update request to product service for Product ID: {}, Delta: {}", productId, quantityDelta);
-        InventoryUpdate inv = new InventoryUpdate();
+	private void reverseProductStocks(List<SaleInvoiceDetail> details) {
+		applyProductStockChanges(details, 1);
+	}
 
-        inv.stockDelta(quantityDelta);
+	private void applyProductStockChanges(
+			List<SaleInvoiceDetail> details,
+			int multiplier
+			) 
+	{
+		// Aggregate quantities by product ID.
+		Map<Long, Integer> movements = new LinkedHashMap<>();
 
-        try {
-            rest.patchForObject(
-                    productServiceUrl + "/products/{id}/inventory",
-                    inv,
-                    ProductDTO.class,
-                    productId
-            );
-            log.info("Successfully updated stock for Product ID: {}", productId);
-        } catch (Exception e) {
-            log.error("Failed to update stock for Product ID: {}. Error: {}", productId, e.getMessage(), e);
-            throw new SaleInvoiceBadRequestException("Error updating inventory for product ID " + productId);
-        }
-    }
+		for (SaleInvoiceDetail detail : details) {
 
+			Long productId = detail.getProduct().getId();
+			int delta = Math.multiplyExact(detail.getQuantity(), multiplier);
+
+			movements.merge(
+					productId,
+					delta,
+					Math::addExact
+					);
+		}
+
+		List<InventoryUpdateLine> lines = new ArrayList<>();
+
+		for (Map.Entry<Long, Integer> movement : movements.entrySet()) {
+
+			InventoryUpdateLine line = new InventoryUpdateLine();
+
+			line.setProductId(movement.getKey());
+			line.setStockDelta(movement.getValue());
+
+			// No unitCost: sales never modify product cost.
+
+			lines.add(line);
+		}
+
+		InventoryUpdate update = new InventoryUpdate();
+		update.setDetails(lines);
+
+		try {
+			rest.postForObject(
+					productServiceUrl + "/products/inventory",
+					update,
+					Void.class
+					);
+
+			log.info(
+					"Applied sales inventory batch with {} product movements",
+					lines.size()
+					);
+
+		} catch (Exception e) {
+			log.error("Failed to apply sales inventory batch", e);
+			throw new SaleInvoiceBadRequestException(
+					"Error updating product inventory"
+					);
+		}
+			}
 }
