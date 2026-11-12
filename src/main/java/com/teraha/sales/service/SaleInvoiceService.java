@@ -38,9 +38,13 @@ import com.teraha.sales.exception.SaleInvoiceNotFoundException;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.web.client.RestTemplate;
+import org.springframework.web.client.HttpClientErrorException;
 import org.springframework.cache.annotation.Cacheable;
 import org.springframework.cache.annotation.CachePut;
 import org.springframework.cache.annotation.CacheEvict;
+
+import com.fasterxml.jackson.databind.JsonNode;
+import com.fasterxml.jackson.databind.ObjectMapper;
 
 @Slf4j
 @RequiredArgsConstructor
@@ -57,6 +61,7 @@ public class SaleInvoiceService {
     private final ClientRepository clientRepository;
     private final EntityManager entityManager;
     private final ProductRepository productRepository;
+	private final ObjectMapper objectMapper;
 
     @CachePut(cacheNames = "sales:invoices", key = "#result.id")
     public SaleInvoiceDTO createSaleInvoice(SaleInvoiceDTO dto) {
@@ -279,11 +284,24 @@ public class SaleInvoiceService {
 					lines.size()
 					);
 
-		} catch (Exception e) {
-			log.error("Failed to apply sales inventory batch", e);
-			throw new SaleInvoiceBadRequestException(
-					"Error updating product inventory"
-					);
-		}
+		} catch (HttpClientErrorException e) {
+
+			String message = e.getStatusText();
+
+			try {
+				JsonNode response = objectMapper.readTree(e.getResponseBodyAsString());
+
+				if (response.hasNonNull("message")) {
+					message = response.get("message").asText();
+				}
+
+			} catch (Exception parsingException) {
+				log.warn("Could not parse error response from Products", parsingException);
 			}
+
+			log.warn("Products rejected inventory update: {}", message);
+
+			throw new SaleInvoiceBadRequestException(message);
+		}
+	}
 }

@@ -34,15 +34,27 @@ public class ClientExceptionHandler {
         return new ResponseEntity<>(error, HttpStatus.CONFLICT);
     }
 
-    @ExceptionHandler(Exception.class)
-    public ResponseEntity<ErrorResponse> handleGenericError(Exception exception){
+	@ExceptionHandler(SaleInvoiceBadRequestException.class)
+	public ResponseEntity<ErrorResponse> handleSaleInvoiceBadRequest(
+			SaleInvoiceBadRequestException exception
+			) {
+		ErrorResponse error = new ErrorResponse()
+			.status(HttpStatus.BAD_REQUEST.value())
+			.message(exception.getMessage())
+			.timestamp(OffsetDateTime.now());
 
-        log.error("Unexpected error while processing client request", exception);
+		return new ResponseEntity<>(error, HttpStatus.BAD_REQUEST);
+			}
 
-        ErrorResponse error = new ErrorResponse()
-                .status(HttpStatus.INTERNAL_SERVER_ERROR.value())
-                .message(HttpStatus.INTERNAL_SERVER_ERROR.getReasonPhrase())
-                .timestamp(OffsetDateTime.now());
-        return new ResponseEntity<>(error, HttpStatus.INTERNAL_SERVER_ERROR);
-    }
+	@ExceptionHandler(Exception.class)
+	public ResponseEntity<ErrorResponse> handleGenericError(Exception exception){
+
+		log.error("Unexpected error while processing client request", exception);
+
+		ErrorResponse error = new ErrorResponse()
+			.status(HttpStatus.INTERNAL_SERVER_ERROR.value())
+			.message(HttpStatus.INTERNAL_SERVER_ERROR.getReasonPhrase())
+			.timestamp(OffsetDateTime.now());
+		return new ResponseEntity<>(error, HttpStatus.INTERNAL_SERVER_ERROR);
+	}
 }
